@@ -1,0 +1,7 @@
+{
+  "name": "Mathiverse Playground",
+  "description": "An interactive math game that uses your hand gestures, powered by AI. Solve arithmetic problems or pick numbers using your camera and MediaPipe for hand tracking.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

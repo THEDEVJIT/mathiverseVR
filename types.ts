@@ -3,6 +3,7 @@ export enum GameMode {
   MENU = 'MENU',
   ARITHMETIC = 'ARITHMETIC',
   NUMBER_PICKER = 'NUMBER_PICKER',
+  MATH_PUZZLE = 'MATH_PUZZLE',
 }
 
 export interface ArithmeticProblem {
@@ -16,6 +17,12 @@ export type NumberType = 'even' | 'odd' | 'prime' | 'fibonacci';
 export interface NumberPickerProblem {
   numbers: number[];
   type: NumberType;
+  correctAnswer: number;
+}
+
+export interface MathPuzzleProblem {
+  question: string;
+  options: number[];
   correctAnswer: number;
 }
 

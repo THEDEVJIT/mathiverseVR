@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { GameMode, ArithmeticProblem, NumberPickerProblem, Results, LandmarkList, NumberType } from './types';
-import { generateArithmeticProblem, generateNumberPickerProblem } from './utils/mathHelpers';
+import { GameMode, ArithmeticProblem, NumberPickerProblem, Results, LandmarkList, NumberType, MathPuzzleProblem } from './types';
+import { generateArithmeticProblem, generateNumberPickerProblem, generateMathPuzzleProblem } from './utils/mathHelpers';
 import { countFingers, isPinching, getIndexFingerTipCoordinates } from './utils/handGestureUtils';
 
 const GameContainer: React.FC<{ children: React.ReactNode, title: string, onBack: () => void }> = ({ children, title, onBack }) => (
@@ -250,11 +250,96 @@ const NumberPickerGame = ({ backToMenu }: { backToMenu: () => void }) => {
     );
 };
 
+const MathPuzzleGame = ({ backToMenu }: { backToMenu: () => void }) => {
+    const [problem, setProblem] = useState<MathPuzzleProblem>(generateMathPuzzleProblem());
+    const [feedback, setFeedback] = useState<{ message: string; color: string } | null>(null);
+    const [score, setScore] = useState(0);
+    const [cursor, setCursor] = useState<{ x: number, y: number } | null>(null);
+    const optionRefs = useRef<Array<{el: HTMLDivElement | null}>>([]);
+
+    useEffect(() => {
+        optionRefs.current = Array(4).fill(null).map(() => ({ el: null }));
+    }, [problem]);
+
+    const newProblem = useCallback(() => {
+        setProblem(generateMathPuzzleProblem());
+        setFeedback(null);
+    }, []);
+
+    const onResults = useCallback((results: Results) => {
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0 && !feedback) {
+            const handLandmarks = results.multiHandLandmarks[0];
+            const fingerTip = getIndexFingerTipCoordinates(handLandmarks);
+            if (fingerTip) {
+                setCursor({x: 1 - fingerTip.x, y: fingerTip.y });
+            }
+
+            if (isPinching(handLandmarks)) {
+                let selectedNumber: number | null = null;
+                if(cursor) {
+                    const cursorEl = document.getElementById('cursor-dot');
+                    if (cursorEl) {
+                        const cursorRect = cursorEl.getBoundingClientRect();
+                        for(let i=0; i<optionRefs.current.length; i++){
+                            const optEl = optionRefs.current[i].el;
+                            if(optEl){
+                                const optRect = optEl.getBoundingClientRect();
+                                if (cursorRect.left < optRect.right && cursorRect.right > optRect.left &&
+                                    cursorRect.top < optRect.bottom && cursorRect.bottom > optRect.top) {
+                                    selectedNumber = problem.options[i];
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (selectedNumber !== null) {
+                    if (selectedNumber === problem.correctAnswer) {
+                        setFeedback({ message: 'Correct!', color: 'text-green-400' });
+                        setScore(s => s + 20);
+                        setTimeout(newProblem, 1500);
+                    } else {
+                        setFeedback({ message: 'Wrong!', color: 'text-red-400' });
+                        setTimeout(() => setFeedback(null), 1000);
+                    }
+                }
+            }
+        } else {
+            setCursor(null);
+        }
+    }, [feedback, cursor, newProblem, problem]);
+
+    return (
+        <GameContainer title="Math Puzzle" onBack={backToMenu}>
+            <div className="w-full max-w-2xl text-center mb-4 p-4 bg-black bg-opacity-50 rounded-lg">
+                <p className="text-3xl md:text-5xl font-orbitron text-yellow-300 text-glow tracking-wider">
+                    {problem.question} = ?
+                </p>
+                <p className="mt-2 text-xl font-semibold">Score: {score}</p>
+            </div>
+             <CameraView onResults={onResults}>
+                <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-8 p-12 items-center justify-items-center">
+                     {problem.options.map((opt, i) => (
+                        <div key={`${problem.correctAnswer}-${opt}-${i}`} 
+                            ref={el => optionRefs.current[i] = {el}}
+                            className="w-32 h-32 md:w-40 md:h-40 bg-indigo-600 bg-opacity-80 rounded-2xl flex items-center justify-center text-4xl md:text-5xl font-bold font-orbitron border-4 border-indigo-400 shadow-lg shadow-indigo-500/50 transition-all duration-300 hover:scale-105 hover:bg-indigo-500 cursor-pointer">
+                            {opt}
+                        </div>
+                    ))}
+                </div>
+                 {cursor && <div id="cursor-dot" className="absolute w-8 h-8 bg-yellow-400 rounded-full border-2 border-white -translate-x-1/2 -translate-y-1/2 pointer-events-none shadow-lg shadow-yellow-500/50 transition-all duration-75" style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%` }}></div>}
+                 {feedback && <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center text-6xl font-bold font-orbitron animate-bounce" style={{ color: feedback.color.replace('text-', '') }}>{feedback.message}</div>}
+            </CameraView>
+        </GameContainer>
+    );
+};
+
 
 const GameSelector = ({ onSelectGame }: { onSelectGame: (mode: GameMode) => void }) => {
     return (
         <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-gradient-to-b from-gray-900 to-indigo-900">
-            <h1 className="font-orbitron text-5xl md:text-7xl font-black mb-4 text-glow tracking-widest">
+            <h1 className="font-orbitron text-5xl md:text-7xl font-black mb-4 text-glow tracking-widest text-center">
                 MATHIVERSE
             </h1>
             <p className="text-xl text-indigo-200 mb-12 max-w-2xl text-center">
@@ -270,6 +355,11 @@ const GameSelector = ({ onSelectGame }: { onSelectGame: (mode: GameMode) => void
                     onClick={() => onSelectGame(GameMode.NUMBER_PICKER)}
                     className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xl py-4 px-8 rounded-lg transition-transform transform hover:scale-105 shadow-lg shadow-purple-500/50 font-orbitron">
                     Number Hunt
+                </button>
+                <button
+                    onClick={() => onSelectGame(GameMode.MATH_PUZZLE)}
+                    className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold text-xl py-4 px-8 rounded-lg transition-transform transform hover:scale-105 shadow-lg shadow-yellow-500/50 font-orbitron">
+                    Math Puzzle
                 </button>
             </div>
         </div>
@@ -292,6 +382,8 @@ const App = () => {
             return <ArithmeticGame backToMenu={backToMenu} />;
         case GameMode.NUMBER_PICKER:
             return <NumberPickerGame backToMenu={backToMenu} />;
+        case GameMode.MATH_PUZZLE:
+            return <MathPuzzleGame backToMenu={backToMenu} />;
         case GameMode.MENU:
         default:
             return <GameSelector onSelectGame={selectGame} />;

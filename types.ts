@@ -4,6 +4,8 @@ export enum GameMode {
   ARITHMETIC = 'ARITHMETIC',
   NUMBER_PICKER = 'NUMBER_PICKER',
   MATH_PUZZLE = 'MATH_PUZZLE',
+  RIGHT_BOX = 'RIGHT_BOX',
+  ANGLE_MAGIC = 'ANGLE_MAGIC',
 }
 
 export interface ArithmeticProblem {
@@ -24,6 +26,19 @@ export interface MathPuzzleProblem {
   question: string;
   options: number[];
   correctAnswer: number;
+}
+
+export interface DraggableNumber {
+  id: string;
+  value: number;
+  x: number;
+  y: number;
+  isDragging: boolean;
+}
+
+export interface RightBoxLevel {
+  targetType: 'even' | 'odd';
+  numbers: DraggableNumber[];
 }
 
 export type Landmark = {

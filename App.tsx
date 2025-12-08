@@ -91,7 +91,7 @@ const CameraView: React.FC<{ onResults: (results: Results) => void, children?: R
     }, []);
     
     return (
-        <div className="relative w-full max-w-2xl mx-auto aspect-video rounded-2xl overflow-hidden shadow-2xl shadow-indigo-500/40">
+        <div className="relative w-full max-w-5xl mx-auto aspect-video rounded-2xl overflow-hidden shadow-2xl shadow-indigo-500/40">
             {loading && (
                 <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center z-20">
                     <p className="text-xl font-orbitron animate-pulse">Initializing Camera...</p>
@@ -238,7 +238,7 @@ const NumberPickerGame = ({ backToMenu }: { backToMenu: () => void }) => {
                      {problem.numbers.map((num, i) => (
                         <div key={`${problem.correctAnswer}-${num}-${i}`} 
                             ref={el => numberPositions.current[i] = {el}}
-                            className="w-20 h-20 md:w-24 md:h-24 bg-purple-600 bg-opacity-80 rounded-full flex items-center justify-center text-3xl font-bold font-orbitron border-4 border-purple-400 shadow-lg shadow-purple-500/50 transition-transform duration-300 hover:scale-110 cursor-pointer">
+                            className="w-20 h-20 md:w-32 md:h-32 bg-purple-600 bg-opacity-80 rounded-full flex items-center justify-center text-3xl font-bold font-orbitron border-4 border-purple-400 shadow-lg shadow-purple-500/50 transition-transform duration-300 hover:scale-110 cursor-pointer">
                             {num}
                         </div>
                     ))}
@@ -323,7 +323,7 @@ const MathPuzzleGame = ({ backToMenu }: { backToMenu: () => void }) => {
                      {problem.options.map((opt, i) => (
                         <div key={`${problem.correctAnswer}-${opt}-${i}`} 
                             ref={el => optionRefs.current[i] = {el}}
-                            className="w-32 h-32 md:w-40 md:h-40 bg-indigo-600 bg-opacity-80 rounded-2xl flex items-center justify-center text-4xl md:text-5xl font-bold font-orbitron border-4 border-indigo-400 shadow-lg shadow-indigo-500/50 transition-all duration-300 hover:scale-105 hover:bg-indigo-500 cursor-pointer">
+                            className="w-32 h-32 md:w-48 md:h-48 bg-indigo-600 bg-opacity-80 rounded-2xl flex items-center justify-center text-4xl md:text-6xl font-bold font-orbitron border-4 border-indigo-400 shadow-lg shadow-indigo-500/50 transition-all duration-300 hover:scale-105 hover:bg-indigo-500 cursor-pointer">
                             {opt}
                         </div>
                     ))}
@@ -549,170 +549,153 @@ const AngleMagicGame = ({ backToMenu }: { backToMenu: () => void }) => {
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // --- Unified Angle Logic ---
-        // We define a Vertex and Two Rays.
-        // Two Hands Mode: Vertex = Midpoint(LeftWrist, RightWrist). Ray1 = Right Index. Ray2 = Left Index.
-        // One Hand Mode: Vertex = Wrist. Ray1 = Thumb. Ray2 = Index.
-        
-        let vertex = { x: 0, y: 0 };
-        let ray1 = { x: 0, y: 0 }; // Base Arm
-        let ray2 = { x: 0, y: 0 }; // Target Arm
-        let isValid = false;
-
         const w = canvas.width;
         const h = canvas.height;
 
-        // Identify hands
-        const leftHandIdx = results.multiHandedness?.findIndex(h => h.label === 'Left');
-        const rightHandIdx = results.multiHandedness?.findIndex(h => h.label === 'Right');
+        // Use robust "Finger Direction" logic.
+        // We find the angle of the vector formed by Wrist -> IndexFingerTip for each hand.
+        
+        let isValid = false;
+        let theta1 = 0; // Screen Right Hand (User Left) Angle
+        let theta2 = 0; // Screen Left Hand (User Right) Angle
+        let vertex = { x: w / 2, y: h / 2 }; // Default center if intersection fails
 
-        if (leftHandIdx !== undefined && leftHandIdx !== -1 && rightHandIdx !== undefined && rightHandIdx !== -1) {
-            // --- TWO HANDS MODE ---
-            // Allows full 360 degrees (Acute, Right, Obtuse, Straight, Reflex)
-            const lh = results.multiHandLandmarks[leftHandIdx];
-            const rh = results.multiHandLandmarks[rightHandIdx];
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length === 2) {
+            const h1 = results.multiHandLandmarks[0];
+            const h2 = results.multiHandLandmarks[1];
+
+            // Sort by X coordinate: Screen Left (User Right) vs Screen Right (User Left)
+            const screenLeftHand = h1[0].x < h2[0].x ? h1 : h2;  // Usually User Right Hand
+            const screenRightHand = h1[0].x < h2[0].x ? h2 : h1; // Usually User Left Hand
+
+            // Get Key Points (Screen Coords)
+            const wristL = { x: (1 - screenLeftHand[0].x) * w, y: screenLeftHand[0].y * h };
+            const tipL = { x: (1 - screenLeftHand[8].x) * w, y: screenLeftHand[8].y * h };
             
-            // Note: Camera is mirrored (scaleX -1). 
-            // Raw x=0 is Camera Left (Screen Right after flip).
-            // However, our manual coordinate mapping in previous games used (1-x).
-            // Let's stick to (1-x) to map to screen coordinates properly.
+            const wristR = { x: (1 - screenRightHand[0].x) * w, y: screenRightHand[0].y * h };
+            const tipR = { x: (1 - screenRightHand[8].x) * w, y: screenRightHand[8].y * h };
+
+            // Calculate angles of the FINGERS themselves (Cartesian: Y up is positive)
+            // Screen Y is down, so dy = -(y2 - y1)
+            const angleL = Math.atan2(-(tipL.y - wristL.y), tipL.x - wristL.x) * (180 / Math.PI);
+            const angleR = Math.atan2(-(tipR.y - wristR.y), tipR.x - wristR.x) * (180 / Math.PI);
+
+            theta2 = (angleL + 360) % 360;
+            theta1 = (angleR + 360) % 360;
+
+            // Calculate Intersection of the two lines for the visual vertex
+            // Line 1: (wristR -> tipR), Line 2: (wristL -> tipL)
+            // L1: A1x + B1y = C1
+            const A1 = tipR.y - wristR.y;
+            const B1 = wristR.x - tipR.x;
+            const C1 = A1 * wristR.x + B1 * wristR.y;
             
-            // Vertex is midpoint of wrists
-            vertex = {
-                x: ((1 - lh[0].x) + (1 - rh[0].x)) / 2 * w,
-                y: (lh[0].y + rh[0].y) / 2 * h
-            };
+            const A2 = tipL.y - wristL.y;
+            const B2 = wristL.x - tipL.x;
+            const C2 = A2 * wristL.x + B2 * wristL.y;
 
-            // Ray 1: From Vertex to Right Hand Index (which appears on Screen Right side)
-            // This acts as our "0 degree" base roughly.
-            ray1 = {
-                x: (1 - rh[8].x) * w,
-                y: rh[8].y * h
-            };
+            const det = A1 * B2 - A2 * B1;
+            
+            if (Math.abs(det) > 1) { // Not parallel
+                const ix = (B2 * C1 - B1 * C2) / det;
+                const iy = (A1 * C2 - A2 * C1) / det;
+                // Only use intersection if it's somewhat on screen (expanded bounds)
+                if (ix > -w && ix < 2*w && iy > -h && iy < 2*h) {
+                    vertex = { x: ix, y: iy };
+                } else {
+                     // Fallback to midpoint of wrists if intersection is way off
+                    vertex = { x: (wristL.x + wristR.x)/2, y: (wristL.y + wristR.y)/2 };
+                }
+            } else {
+                 vertex = { x: (wristL.x + wristR.x)/2, y: (wristL.y + wristR.y)/2 };
+            }
 
-            // Ray 2: From Vertex to Left Hand Index (Screen Left side)
-            ray2 = {
-                x: (1 - lh[8].x) * w,
-                y: lh[8].y * h
-            };
             isValid = true;
-        } else if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-            // --- ONE HAND MODE ---
-            // Limited mostly to Acute/Right (physical limitations)
+
+        } else if (results.multiHandLandmarks && results.multiHandLandmarks.length === 1) {
+            // One hand mode: Thumb vs Index
             const hand = results.multiHandLandmarks[0];
-            vertex = {
-                x: (1 - hand[0].x) * w,
-                y: hand[0].y * h
-            };
-            // Ray 1: Thumb
-            ray1 = {
-                x: (1 - hand[4].x) * w,
-                y: hand[4].y * h
-            };
-            // Ray 2: Index
-            ray2 = {
-                x: (1 - hand[8].x) * w,
-                y: hand[8].y * h
-            };
+            vertex = { x: (1 - hand[0].x) * w, y: hand[0].y * h }; // Wrist as vertex
+            
+            // Thumb Vector
+            const tipThumb = { x: (1 - hand[4].x) * w, y: hand[4].y * h };
+            const mcpThumb = { x: (1 - hand[2].x) * w, y: hand[2].y * h }; // Use MCP for stability
+            
+            // Index Vector
+            const tipIndex = { x: (1 - hand[8].x) * w, y: hand[8].y * h };
+            const mcpIndex = { x: (1 - hand[5].x) * w, y: hand[5].y * h };
+
+            const angleThumb = Math.atan2(-(tipThumb.y - vertex.y), tipThumb.x - vertex.x) * (180 / Math.PI);
+            const angleIndex = Math.atan2(-(tipIndex.y - vertex.y), tipIndex.x - vertex.x) * (180 / Math.PI);
+
+            theta1 = (angleThumb + 360) % 360;
+            theta2 = (angleIndex + 360) % 360;
             isValid = true;
         }
 
         if (isValid) {
-            // Calculate Vectors relative to Vertex
-            const angle1 = getVectorAngle(vertex, ray1); // Base
-            const angle2 = getVectorAngle(vertex, ray2); // Target
+            // Calculate CCW sweep from Theta1 (Base) to Theta2 (Target)
+            let diff = theta2 - theta1;
+            if (diff < 0) diff += 360;
 
-            // Calculate Difference (Counter-Clockwise from Ray1 to Ray2)
-            const diff = getAngleDifference(angle1, angle2);
-            
             const type = classifyAngle(diff);
             setAngleData({ degrees: Math.round(diff), type });
 
             // --- Visualization ---
+            const radius = 80;
             
-            // Draw Angle Sector (Filled Arc)
+            // Draw Rays from Vertex based on Calculated Angles
+            // Note: Canvas Y is down. Math angle 0 is +X. Math angle 90 is +Y (Up).
+            // Canvas Angle 0 is +X. Canvas Angle -PI/2 is Up. 
+            // So to draw Math Angle `alpha` on Canvas, we need `-alpha`.
+            
+            const startRad = -theta1 * (Math.PI / 180); 
+            const endRad = -theta2 * (Math.PI / 180);
+
             ctx.beginPath();
             ctx.moveTo(vertex.x, vertex.y);
-            // Arc logic: ctx.arc(x, y, radius, startAngle, endAngle, counterClockwise)
-            // Canvas angles: 0 is Right. Positive is Clockwise (because Y is down).
-            // Our getVectorAngle returns degrees 0-360 CCW from X-axis (mathematical).
-            // We need to convert back to Canvas radians.
-            // Math angle (theta) -> Canvas angle: -theta (since Y is flipped).
-            // Wait, getVectorAngle inverted Y.
-            // Let's re-calculate raw atan2 for canvas drawing
-            const rawAngle1 = Math.atan2(ray1.y - vertex.y, ray1.x - vertex.x);
-            const rawAngle2 = Math.atan2(ray2.y - vertex.y, ray2.x - vertex.x);
             
-            // Draw the sector. We want the shortest path usually, or the CCW path?
-            // The logic above computed diff CCW from ray1 to ray2.
-            // So we draw arc from rawAngle1 to rawAngle2.
-            // Since canvas Y is down, positive angle is Clockwise visually.
-            // If we computed CCW diff in math, we should likely draw CCW in canvas?
-            // Actually, let's just draw from Angle1 to Angle2 using the `diff` to decide direction?
-            // Easier: just draw arc.
-            ctx.arc(vertex.x, vertex.y, 60, rawAngle1, rawAngle2, false); // Draw full way?
-            // The `false` means Clockwise? No, `anticlockwise` argument. false = Clockwise.
-            // We want CCW (Mathematical positive). So `true`? 
-            // But screen Y is flipped.
-            // Let's just try drawing a line for now, or just fill.
-            
-            // To properly fill the specific angle we measured:
-            // We measured CCW from Ray1 to Ray2.
-            // If diff is 270 (Reflex), we want the big arc.
-            // If diff is 90, we want small arc.
-            
-            // Using `anticlockwise = true` draws CCW on unit circle (if Y up).
-            // With Y down, `true` (CCW) means visual Clockwise? No.
-            // Let's rely on the visual: Ray1 is Base. Ray2 is Target.
-            // We want to highlight the area swept from Ray1 to Ray2.
-            
-            // To ensure we draw the 'interior' or 'exterior' correctly based on our math:
-            // We can draw a lot of small lines or just use the arc with correct flag.
-            // Let's assume standard small angle for now unless reflex.
-            
-            // Actually, simplest way for visualization that matches `diff`:
-            // We calculated `diff`.
-            // If we just draw arc(vertex, r, angle1, angle2), canvas picks one way.
-            // Let's just draw the lines and the text, the sector might be tricky to get perfect without complex logic.
-            // But let's try a simple fill.
-            
-            ctx.globalAlpha = 0.3;
-            ctx.fillStyle = type === 'Reflex' ? '#a855f7' : '#facc15'; // Purple for Reflex, Yellow others
-            // Canvas arc draws from start to end.
-            // We want to draw the shape corresponding to `diff`.
-            // If diff is small, straightforward. If diff > 180, we need the "long" way.
-            // A helper to draw the correct sector:
-            
-            // We know we went `diff` degrees CCW (mathematically) from Ray1 to Ray2.
-            // In screen coords (Y down), +Angle is CW. -Angle is CCW.
-            // Math Angle A -> Screen Angle -A.
-            // So we go -diff degrees (Screen CCW which is Visual CW?? This is confusing).
-            
-            // Let's just draw lines. It's safer.
-            ctx.lineTo(ray2.x, ray2.y);
-            ctx.closePath();
-            ctx.fill();
-            ctx.globalAlpha = 1.0;
+            // Draw Sector: Arc from startRad to endRad.
+            // Since we calculated diff as theta2 - theta1 (CCW in Cartesian),
+            // In Canvas (Y-flipped), CCW Cartesian is CW Canvas.
+            // We want to visually fill the area.
+            ctx.arc(vertex.x, vertex.y, radius, startRad, endRad, true); 
 
-            // Draw Rays
-            ctx.lineWidth = 6;
+            ctx.lineTo(vertex.x, vertex.y);
+            ctx.closePath();
+            
+            ctx.globalAlpha = 0.4;
+            const isReflex = diff > 180;
+            ctx.fillStyle = isReflex ? '#a855f7' : '#facc15';
+            ctx.fill();
+
+            // Outline
+            ctx.globalAlpha = 1.0;
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = isReflex ? '#a855f7' : '#facc15';
+            ctx.stroke();
+
+            // Draw Vector Lines (Visual Aids for Finger Direction)
+            ctx.lineWidth = 4;
             ctx.lineCap = 'round';
             
             // Ray 1 (Base - Cyan)
             ctx.beginPath();
             ctx.moveTo(vertex.x, vertex.y);
-            ctx.lineTo(ray1.x, ray1.y);
+            // Project out
+            ctx.lineTo(vertex.x + Math.cos(startRad) * 150, vertex.y + Math.sin(startRad) * 150);
             ctx.strokeStyle = '#06b6d4';
             ctx.stroke();
 
             // Ray 2 (Target - Pink)
             ctx.beginPath();
             ctx.moveTo(vertex.x, vertex.y);
-            ctx.lineTo(ray2.x, ray2.y);
+             // Project out
+            ctx.lineTo(vertex.x + Math.cos(endRad) * 150, vertex.y + Math.sin(endRad) * 150);
             ctx.strokeStyle = '#d946ef';
             ctx.stroke();
 
-            // Vertex Point
+            // Vertex Dot
             ctx.beginPath();
             ctx.arc(vertex.x, vertex.y, 8, 0, 2 * Math.PI);
             ctx.fillStyle = 'white';
@@ -728,7 +711,7 @@ const AngleMagicGame = ({ backToMenu }: { backToMenu: () => void }) => {
         <GameContainer title="Angle Magic" onBack={backToMenu}>
             <div className="w-full max-w-2xl text-center mb-4 p-4 bg-black bg-opacity-50 rounded-lg relative z-20">
                 <p className="text-xl md:text-2xl text-indigo-200 mb-2">
-                    Open your arms! <span className="text-cyan-400 font-bold">Right Hand</span> is Base, <span className="text-purple-400 font-bold">Left Hand</span> moves.
+                    Point your fingers to make the angle!
                 </p>
                 {angleData ? (
                     <div>
@@ -736,11 +719,11 @@ const AngleMagicGame = ({ backToMenu }: { backToMenu: () => void }) => {
                             {angleData.degrees}°
                         </p>
                         <p className={`text-3xl md:text-5xl font-orbitron font-bold animate-pulse
-                            ${angleData.type === 'Acute' ? 'text-blue-400' : 
-                              angleData.type === 'Right' ? 'text-green-400' :
-                              angleData.type === 'Obtuse' ? 'text-orange-400' :
-                              angleData.type === 'Straight' ? 'text-red-400' :
-                              angleData.type === 'Reflex' ? 'text-purple-400' : 'text-white'}`}>
+                            ${angleData.type === 'ସୂକ୍ଷ୍ମ କୋଣ' ? 'text-blue-400' : 
+                              angleData.type === 'ସମକୋଣ' ? 'text-green-400' :
+                              angleData.type === 'ସ୍ଥୂଳ କୋଣ' ? 'text-orange-400' :
+                              angleData.type === 'ସରଳ କୋଣ' ? 'text-red-400' :
+                              angleData.type === 'ପ୍ରବୃଦ୍ଧ କୋଣ' ? 'text-purple-400' : 'text-white'}`}>
                             {angleData.type}
                         </p>
                     </div>

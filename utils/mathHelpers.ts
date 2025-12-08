@@ -173,11 +173,11 @@ export const getAngleDifference = (angle1: number, angle2: number): number => {
 };
 
 export const classifyAngle = (angle: number): string => {
-    // Determine angle type with some tolerance for floating point jitter
-    if (angle < 5 || angle > 355) return 'Complete (360°)';
-    if (angle < 85) return 'Acute';
-    if (angle <= 95) return 'Right';
-    if (angle < 175) return 'Obtuse';
-    if (angle <= 185) return 'Straight';
-    return 'Reflex';
+    // Widened tolerances for easier detection based on user feedback
+    if (angle < 15 || angle > 345) return 'ପୂର୍ଣ୍ଣ କୋଣ'; // Complete (360)
+    if (angle < 75) return 'ସୂକ୍ଷ୍ମ କୋଣ'; // Acute (0-75)
+    if (angle <= 105) return 'ସମକୋଣ'; // Right (75-105 range - widened)
+    if (angle < 170) return 'ସ୍ଥୂଳ କୋଣ'; // Obtuse (105-170)
+    if (angle <= 190) return 'ସରଳ କୋଣ'; // Straight (170-190 range)
+    return 'ପ୍ରବୃଦ୍ଧ କୋଣ'; // Reflex
 };

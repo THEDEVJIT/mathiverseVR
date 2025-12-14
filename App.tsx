@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GameMode, ArithmeticProblem, NumberPickerProblem, Results, LandmarkList, NumberType, MathPuzzleProblem, RightBoxLevel, DraggableNumber } from './types';
 import { generateArithmeticProblem, generateNumberPickerProblem, generateMathPuzzleProblem, generateRightBoxLevel, getVectorAngle, getAngleDifference, classifyAngle } from './utils/mathHelpers';
@@ -741,7 +740,12 @@ const AngleMagicGame = ({ backToMenu }: { backToMenu: () => void }) => {
 
 const GameSelector = ({ onSelectGame }: { onSelectGame: (mode: GameMode) => void }) => {
     return (
-        <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-gradient-to-b from-gray-900 to-indigo-900">
+        <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-gradient-to-b from-gray-900 to-indigo-900 relative">
+             <a
+                href="https://mathiverse-alpha.vercel.app/"
+                className="absolute top-4 left-4 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-full transition-transform transform hover:scale-105 shadow-lg z-50 flex items-center gap-2">
+                <span>&larr;</span> Back
+            </a>
             <h1 className="font-orbitron text-5xl md:text-7xl font-black mb-4 text-glow tracking-widest text-center">
                 MATHIVERSE
             </h1>
